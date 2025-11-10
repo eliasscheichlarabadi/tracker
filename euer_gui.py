@@ -101,7 +101,7 @@ def save_settings():
 
 def load_umsatz_history():
     """Load previously exported revenue summaries from disk."""
-    global umsatz_history
+    global umsatz_history, firmen_liste
     if not os.path.exists(UMSATZ_HISTORY_FILE):
         return
     try:
@@ -121,6 +121,20 @@ def load_umsatz_history():
                     "endbestand": row.get("endbestand", ""),
                 }
                 umsatz_history.append(entry)
+
+            # Synchronisiere eventuell neue Firmennamen aus der Historie
+            bekannte_firmen = set(firmen_liste)
+            neue_firmen_gefunden = False
+            for eintrag in umsatz_history:
+                name = (eintrag.get("firma") or "").strip()
+                if name and name not in bekannte_firmen:
+                    firmen_liste.append(name)
+                    bekannte_firmen.add(name)
+                    neue_firmen_gefunden = True
+
+            if neue_firmen_gefunden:
+                firmen_liste.sort()
+                save_settings()
     except Exception:
         umsatz_history = []
 
@@ -269,7 +283,6 @@ def create_new_umsatz():
             os.remove(DB_CSV)
         except Exception:
             pass
-    save_settings()
     refresh_transaction_list()
     datum_anzeigen()
     ask_firma_if_needed(force=True)
@@ -661,27 +674,35 @@ def ask_firma_if_needed(force: bool = False):
     label = ctk.CTkLabel(dialog, text="Für welche Firma soll der Umsatz erfasst werden?", wraplength=360)
     label.pack(pady=(20, 10))
 
-    options = list(firmen_liste)
-    new_option = "Neue Firma..."
-    if new_option not in options:
-        options.append(new_option)
+    options = sorted(firmen_liste)
+    new_option = "➕ Neue Firma anlegen"
+    options.append(new_option)
 
-    default_value = firmenname if firmenname in options else options[0]
+    if force and new_option in options:
+        default_value = new_option
+    elif firmenname and firmenname in options:
+        default_value = firmenname
+    else:
+        default_value = options[0]
+
     selection_var = ctk.StringVar(value=default_value)
 
     entry = ctk.CTkEntry(dialog, width=260)
     if default_value == new_option:
         entry.configure(state="normal")
     else:
+        entry.insert(0, default_value)
         entry.configure(state="disabled")
 
     def on_select(value: str) -> None:
         if value == new_option:
             entry.configure(state="normal")
+            entry.delete(0, tk.END)
             entry.focus_set()
         else:
             entry.configure(state="normal")
             entry.delete(0, tk.END)
+            entry.insert(0, value)
             entry.configure(state="disabled")
 
     dropdown = ctk.CTkOptionMenu(dialog, values=options, variable=selection_var, command=on_select, width=260)
