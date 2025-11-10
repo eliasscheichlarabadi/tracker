@@ -296,6 +296,41 @@ def delete_selected_transaction():
     )
 
 
+def open_transaction_window():
+    """Öffnet ein separates Fenster mit den aktuellen Transaktionen."""
+
+    window = ctk.CTkToplevel(app)
+    window.title("Transaktionen")
+    window.geometry("520x260")
+
+    list_container = tk.Frame(window)
+    list_container.pack(fill="both", expand=True, padx=10, pady=10)
+
+    listbox = tk.Listbox(list_container, height=10, width=70)
+    listbox.pack(side="left", fill="both", expand=True)
+
+    scrollbar = tk.Scrollbar(list_container, orient="vertical", command=listbox.yview)
+    scrollbar.pack(side="right", fill="y")
+    listbox.config(yscrollcommand=scrollbar.set)
+
+    for t in transaktionen:
+        betrag = abs(t["Betrag"])
+        if betrag >= 1000:
+            betrag_str = (
+                f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+        else:
+            betrag_str = f"{betrag:.2f}".replace(".", ",")
+
+        datum = t["Datum"].ljust(10)
+        kategorie = t["Kategorie"].ljust(30)
+        betrag_str = f"{betrag_str} €".rjust(15)
+        listbox.insert(tk.END, f"{datum} | {kategorie} | {betrag_str}")
+
+    close_button = ctk.CTkButton(window, text="Schließen", command=window.destroy)
+    close_button.pack(pady=(0, 10))
+
+
 def create_new_umsatz():
     """Reset the current revenue data to start a new record."""
     if not messagebox.askyesno(
@@ -514,8 +549,11 @@ kategorien = [
 kategorie_option = ctk.CTkOptionMenu(app, values=kategorien, width=250)
 kategorie_option.pack(pady=10)
 
-betrag_entry = ctk.CTkEntry(app, placeholder_text="Betrag (€)")
-betrag_entry.pack(pady=10)
+betrag_row = ctk.CTkFrame(app)
+betrag_row.pack(pady=10)
+
+betrag_entry = ctk.CTkEntry(betrag_row, placeholder_text="Betrag (€)")
+betrag_entry.pack(side="left", padx=(0, 8))
 
 
 def on_enter_pressed(event):
@@ -524,12 +562,13 @@ def on_enter_pressed(event):
 
 betrag_entry.bind("<Return>", on_enter_pressed)
 
-add_button = ctk.CTkButton(
-    app,
-    text="Transaktion hinzufügen",
+add_arrow_button = ctk.CTkButton(
+    betrag_row,
+    text="➤",
+    width=40,
     command=transaktion_hinzufügen,
 )
-add_button.pack(pady=5)
+add_arrow_button.pack(side="left")
 
 export_button = ctk.CTkButton(
     app,
@@ -546,6 +585,13 @@ new_umsatz_button = ctk.CTkButton(
     command=create_new_umsatz,
 )
 new_umsatz_button.pack(pady=5)
+
+show_transactions_button = ctk.CTkButton(
+    app,
+    text="📋 Transaktionen anzeigen",
+    command=open_transaction_window,
+)
+show_transactions_button.pack(pady=5)
 
 info_label = ctk.CTkLabel(app, text="")
 info_label.pack(pady=10)
