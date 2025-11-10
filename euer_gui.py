@@ -252,6 +252,11 @@ def exportieren():
         for col, width in column_widths.items():
             ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
+        # Stelle sicher, dass jede Zelle Arial in Schriftgröße 10 verwendet
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=5):
+            for cell in row:
+                cell.font = cell.font.copy(name="Arial", size=10)
+
         # Build filename (e.g. 'Umsatz 25.11.xlsx')
         filename = f"Umsatz {aktuelles_datum.strftime('%y.%m')}.xlsx"
         wb.save(filename)
