@@ -4,6 +4,7 @@ from tkinter import messagebox, simpledialog
 from datetime import date, timedelta
 import openpyxl
 import csv
+import json
 import os
 
 # === KONFIGURATION ===
@@ -440,6 +441,101 @@ def create_new_umsatz():
             open_transaction_windows.remove(window)
 
 
+
+def delete_selected_transaction():
+    sel = transaction_listbox.curselection()
+    if not sel:
+        info_label.configure(text="❌ Keine Transaktion ausgewählt")
+        return
+
+    idx = sel[0]
+    try:
+        removed = transaktionen.pop(idx)
+    except Exception:
+        info_label.configure(text="❌ Fehler beim Löschen")
+        return
+
+    save_all_to_csv()
+    refresh_transaction_list()
+
+    betrag_abs = abs(removed["Betrag"])
+    if betrag_abs >= 1000:
+        betrag_str = (
+            f"{betrag_abs:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+    else:
+        betrag_str = f"{betrag_abs:.2f}".replace(".", ",")
+    info_label.configure(
+        text=f"🗑️ Transaktion gelöscht: {removed['Kategorie']} {betrag_str} €"
+    )
+
+
+def open_transaction_window():
+    """Öffnet ein separates Fenster mit den aktuellen Transaktionen."""
+
+    window = ctk.CTkToplevel(app)
+    window.title("Transaktionen")
+    window.geometry("520x260")
+
+    list_container = tk.Frame(window)
+    list_container.pack(fill="both", expand=True, padx=10, pady=10)
+
+    listbox = tk.Listbox(list_container, height=10, width=70)
+    listbox.pack(side="left", fill="both", expand=True)
+
+    scrollbar = tk.Scrollbar(list_container, orient="vertical", command=listbox.yview)
+    scrollbar.pack(side="right", fill="y")
+    listbox.config(yscrollcommand=scrollbar.set)
+
+    for t in transaktionen:
+        betrag = abs(t["Betrag"])
+        if betrag >= 1000:
+            betrag_str = (
+                f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+        else:
+            betrag_str = f"{betrag:.2f}".replace(".", ",")
+
+        datum = t["Datum"].ljust(10)
+        kategorie = t["Kategorie"].ljust(30)
+        betrag_str = f"{betrag_str} €".rjust(15)
+        listbox.insert(tk.END, f"{datum} | {kategorie} | {betrag_str}")
+
+    close_button = ctk.CTkButton(window, text="Schließen", command=window.destroy)
+    close_button.pack(pady=(0, 10))
+
+
+def create_new_umsatz():
+    """Reset the current revenue data to start a new record."""
+    if not messagebox.askyesno(
+        "Neuen Umsatz anlegen",
+        "Alle aktuellen Transaktionen löschen und neu beginnen?",
+        parent=app,
+    ):
+        return
+
+    global transaktionen, anfangsbestand, aktuelles_datum, firmenname
+    transaktionen = []
+    anfangsbestand = 0.0
+    aktuelles_datum = date.today()
+    firmenname = ""
+
+    if os.path.exists(DB_CSV):
+        try:
+            os.remove(DB_CSV)
+        except Exception:
+            pass
+
+    refresh_transaction_list()
+    datum_anzeigen()
+    ask_firma_if_needed(force=True)
+    ask_anfangsbestand_if_needed(force=True)
+    save_all_to_csv()
+    info_label.configure(
+        text="🆕 Neuer Umsatz vorbereitet. Bitte Transaktionen erfassen."
+    )
+
+
 def exportieren():
     try:
         wb = openpyxl.Workbook()
@@ -594,60 +690,16 @@ def exportieren():
         filename = f"Umsatz {aktuelles_datum.strftime('%y.%m')}.xlsx"
         wb.save(filename)
 
+        record_umsatz_export(filename, einnahmen, ausgaben, gewinn, endbestand)
         info_label.configure(text=f"📤 Export erfolgreich: {filename}")
     except Exception as exc:
         info_label.configure(text=f"❌ Fehler beim Export: {exc}")
-
-
-def save_current_umsatz():
-    """Speichert die aktuellen Transaktionen in einer eigenen CSV-Datei."""
-
-    if not transaktionen:
-        info_label.configure(text="❌ Keine Transaktionen zum Speichern vorhanden")
-        return
 
     name = simpledialog.askstring(
         "Umsatz speichern",
         "Name für den Umsatz (Dateiname)",
         parent=app,
     )
-
-    if not name:
-        info_label.configure(text="❌ Kein Name angegeben – Speichern abgebrochen")
-        return
-
-    sanitized = "".join(c for c in name.strip() if c not in "\\/:*?\"<>|")
-    if not sanitized:
-        info_label.configure(text="❌ Ungültiger Dateiname")
-        return
-
-    directory = "umsaetze"
-    os.makedirs(directory, exist_ok=True)
-    filename = f"{sanitized}.csv"
-    filepath = os.path.join(directory, filename)
-
-    if os.path.exists(filepath):
-        overwrite = messagebox.askyesno(
-            "Datei überschreiben?",
-            f"Die Datei '{filename}' existiert bereits. Überschreiben?",
-            parent=app,
-        )
-        if not overwrite:
-            info_label.configure(text="❌ Speichern abgebrochen – Datei existiert bereits")
-            return
-
-    try:
-        with open(filepath, "w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file, delimiter=";")
-            if firmenname:
-                writer.writerow(["Firma", firmenname])
-            writer.writerow(["Anfangsbestand", f"{anfangsbestand:.2f}"])
-            for t in transaktionen:
-                writer.writerow([t["Datum"], t["Kategorie"], f"{t['Betrag']:.2f}"])
-        info_label.configure(text=f"💾 Umsatz gespeichert als {filename}")
-    except Exception as exc:
-        info_label.configure(text=f"❌ Fehler beim Speichern des Umsatzes: {exc}")
-
 
 # === GUI ELEMENTE ===
 aktuelles_datum = heutiges_datum
@@ -706,14 +758,6 @@ export_button = ctk.CTkButton(
 )
 export_button.pack(pady=10)
 
-save_umsatz_button = ctk.CTkButton(
-    app,
-    text="💾 Umsatz speichern",
-    fg_color="#27ae60",
-    command=save_current_umsatz,
-)
-save_umsatz_button.pack(pady=5)
-
 new_umsatz_button = ctk.CTkButton(
     app,
     text="🆕 Neuen Umsatz anlegen",
@@ -754,6 +798,8 @@ delete_button = ctk.CTkButton(
 delete_button.pack(side="left", padx=10)
 
 # Load existing DB and ask for firma and Anfangsbestand if needed before starting
+load_settings()
+load_umsatz_history()
 load_db()
 refresh_transaction_list()
 ask_firma_if_needed()
