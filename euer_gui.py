@@ -1,6 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 from datetime import date, timedelta
 import openpyxl
 import csv
@@ -37,155 +37,7 @@ transaktionen = []
 anfangsbestand = 0.0
 firmenname = ""
 transaction_listbox = None
-umsatz_history = []
-
-
-def format_currency(value):
-    """Format a value using German thousands separators and append €."""
-    if value is None or value == "":
-        return ""
-    value = round(float(value), 2)
-    if abs(value) >= 1000:
-        formatted = f"{abs(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    else:
-        formatted = f"{abs(value):.2f}".replace(".", ",")
-    return f"{formatted} €"
-
-
-def load_settings():
-    """Load persisted settings such as the company name."""
-    global firmenname
-    if not os.path.exists(SETTINGS_FILE):
-        return
-    try:
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        firmenname = data.get("firmenname", "").strip()
-    except Exception:
-        firmenname = ""
-
-
-def save_settings():
-    """Persist settings like the company name to disk."""
-    try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump({"firmenname": firmenname}, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-def load_umsatz_history():
-    """Load previously exported revenue summaries from disk."""
-    global umsatz_history
-    if not os.path.exists(UMSATZ_HISTORY_FILE):
-        return
-    try:
-        with open(UMSATZ_HISTORY_FILE, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f, delimiter=";")
-            umsatz_history = list(reader)
-    except Exception:
-        umsatz_history = []
-
-
-def save_umsatz_history():
-    """Persist the list of exported revenue summaries to disk."""
-    fieldnames = [
-        "erstellt_am",
-        "bezugsdatum",
-        "dateiname",
-        "einnahmen",
-        "ausgaben",
-        "gewinn",
-        "endbestand",
-    ]
-    try:
-        with open(UMSATZ_HISTORY_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
-            writer.writeheader()
-            for entry in umsatz_history:
-                writer.writerow(entry)
-    except Exception:
-        pass
-
-
-def record_umsatz_export(filename, einnahmen, ausgaben, gewinn, endbestand):
-    """Store metadata for the exported revenue report."""
-    entry = {
-        "erstellt_am": date.today().strftime("%Y-%m-%d"),
-        "bezugsdatum": aktuelles_datum.strftime("%Y-%m-%d"),
-        "dateiname": filename,
-        "einnahmen": f"{einnahmen:.2f}",
-        "ausgaben": f"{ausgaben:.2f}",
-        "gewinn": f"{gewinn:.2f}",
-        "endbestand": f"{endbestand:.2f}",
-    }
-    umsatz_history.append(entry)
-    save_umsatz_history()
-
-
-def show_umsatz_history():
-    """Display a window listing all exported revenue summaries."""
-    if not umsatz_history:
-        info_label.configure(text="ℹ️ Noch keine Umsätze exportiert")
-        return
-
-    dialog = ctk.CTkToplevel(app)
-    dialog.title("Erstellte Umsätze")
-    dialog.geometry("700x300")
-
-    columns = ("erstellt_am", "bezugsdatum", "dateiname", "einnahmen", "ausgaben", "gewinn", "endbestand")
-    tree = ttk.Treeview(dialog, columns=columns, show="headings")
-    headings = {
-        "erstellt_am": "Erstellt am",
-        "bezugsdatum": "Bezugsdatum",
-        "dateiname": "Dateiname",
-        "einnahmen": "Einnahmen",
-        "ausgaben": "Ausgaben",
-        "gewinn": "Gewinn",
-        "endbestand": "Endbestand",
-    }
-
-    for col, text in headings.items():
-        tree.heading(col, text=text)
-        tree.column(col, anchor="center")
-
-    for entry in umsatz_history:
-        tree.insert(
-            "",
-            tk.END,
-            values=(
-                entry.get("erstellt_am", ""),
-                entry.get("bezugsdatum", ""),
-                entry.get("dateiname", ""),
-                format_currency(entry.get("einnahmen")),
-                format_currency(entry.get("ausgaben")),
-                format_currency(entry.get("gewinn")),
-                format_currency(entry.get("endbestand")),
-            ),
-        )
-
-    tree.pack(fill="both", expand=True, padx=15, pady=15)
-    dialog.grab_set()
-
-
-def create_new_umsatz():
-    """Reset the current revenue data to start a new record."""
-    if not messagebox.askyesno(
-        "Neuen Umsatz anlegen",
-        "Alle aktuellen Transaktionen löschen und neu beginnen?",
-        parent=app,
-    ):
-        return
-
-    global transaktionen, anfangsbestand, aktuelles_datum
-    transaktionen = []
-    anfangsbestand = 0.0
-    aktuelles_datum = date.today()
-    save_all_to_csv()
-    refresh_transaction_list()
-    datum_anzeigen()
-    ask_anfangsbestand_if_needed()
-    info_label.configure(text="🆕 Neuer Umsatz vorbereitet. Bitte Anfangsbestand festlegen.")
+open_transaction_windows = []
 
 
 def format_currency(value):
@@ -416,6 +268,178 @@ def transaktion_hinzufügen():
     )
     betrag_entry.delete(0, "end")
     refresh_transaction_list()
+    for window in list(open_transaction_windows):
+        if window.winfo_exists():
+            window.event_generate("<<TransactionsUpdated>>", when="tail")
+        else:
+            open_transaction_windows.remove(window)
+
+
+def delete_transaction_at_index(idx):
+    try:
+        removed = transaktionen.pop(idx)
+    except Exception:
+        return None
+
+    save_all_to_csv()
+    refresh_transaction_list()
+
+    betrag_abs = abs(removed["Betrag"])
+    if betrag_abs >= 1000:
+        betrag_str = (
+            f"{betrag_abs:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+    else:
+        betrag_str = f"{betrag_abs:.2f}".replace(".", ",")
+    info_label.configure(
+        text=f"🗑️ Transaktion gelöscht: {removed['Kategorie']} {betrag_str} €"
+    )
+    return removed
+
+
+def delete_selected_transaction():
+    sel = transaction_listbox.curselection()
+    if not sel:
+        info_label.configure(text="❌ Keine Transaktion ausgewählt")
+        return
+
+    idx = sel[0]
+    if delete_transaction_at_index(idx) is None:
+        info_label.configure(text="❌ Fehler beim Löschen")
+        return
+
+    for window in list(open_transaction_windows):
+        if not window.winfo_exists():
+            open_transaction_windows.remove(window)
+            continue
+        window.event_generate("<<TransactionsUpdated>>", when="tail")
+
+
+def open_transaction_window():
+    """Öffnet ein separates Fenster mit den aktuellen Transaktionen."""
+
+    window = ctk.CTkToplevel(app)
+    window.title("Transaktionen")
+    window.geometry("520x320")
+
+    list_container = tk.Frame(window)
+    list_container.pack(fill="both", expand=True, padx=10, pady=(10, 0))
+
+    listbox = tk.Listbox(list_container, height=10, width=70)
+    listbox.pack(side="left", fill="both", expand=True)
+
+    scrollbar = tk.Scrollbar(list_container, orient="vertical", command=listbox.yview)
+    scrollbar.pack(side="right", fill="y")
+    listbox.config(yscrollcommand=scrollbar.set)
+
+    def populate_listbox():
+        listbox.delete(0, tk.END)
+        for t in transaktionen:
+            betrag = abs(t["Betrag"])
+            if betrag >= 1000:
+                betrag_str = (
+                    f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+            else:
+                betrag_str = f"{betrag:.2f}".replace(".", ",")
+
+            datum = t["Datum"].ljust(10)
+            kategorie = t["Kategorie"].ljust(30)
+            betrag_str = f"{betrag_str} €".rjust(15)
+            listbox.insert(tk.END, f"{datum} | {kategorie} | {betrag_str}")
+
+    populate_listbox()
+
+    def delete_from_window():
+        selection = listbox.curselection()
+        if not selection:
+            messagebox.showinfo(
+                "Hinweis",
+                "Bitte eine Transaktion auswählen.",
+                parent=window,
+            )
+            return
+        idx = selection[0]
+        if delete_transaction_at_index(idx) is None:
+            messagebox.showerror(
+                "Fehler",
+                "Transaktion konnte nicht gelöscht werden.",
+                parent=window,
+            )
+            return
+        populate_listbox()
+        for other in list(open_transaction_windows):
+            if other is window:
+                continue
+            if other.winfo_exists():
+                other.event_generate("<<TransactionsUpdated>>", when="tail")
+            else:
+                open_transaction_windows.remove(other)
+
+    button_bar = ctk.CTkFrame(window)
+    button_bar.pack(fill="x", padx=10, pady=10)
+
+    delete_btn = ctk.CTkButton(
+        button_bar,
+        text="Transaktion löschen",
+        fg_color="#e74c3c",
+        command=delete_from_window,
+    )
+    delete_btn.pack(side="left")
+
+    close_button = ctk.CTkButton(button_bar, text="Schließen", command=lambda: on_close())
+    close_button.pack(side="right")
+
+    def handle_update(_event):
+        if window.winfo_exists():
+            populate_listbox()
+
+    window.bind("<<TransactionsUpdated>>", handle_update)
+    open_transaction_windows.append(window)
+
+    def on_close():
+        if window in open_transaction_windows:
+            open_transaction_windows.remove(window)
+        window.destroy()
+
+    window.protocol("WM_DELETE_WINDOW", on_close)
+
+
+def create_new_umsatz():
+    """Reset the current revenue data to start a new record."""
+    if not messagebox.askyesno(
+        "Neuen Umsatz anlegen",
+        "Alle aktuellen Transaktionen löschen und neu beginnen?",
+        parent=app,
+    ):
+        return
+
+    global transaktionen, anfangsbestand, aktuelles_datum, firmenname
+    transaktionen = []
+    anfangsbestand = 0.0
+    aktuelles_datum = date.today()
+    firmenname = ""
+
+    if os.path.exists(DB_CSV):
+        try:
+            os.remove(DB_CSV)
+        except Exception:
+            pass
+
+    refresh_transaction_list()
+    datum_anzeigen()
+    ask_firma_if_needed(force=True)
+    ask_anfangsbestand_if_needed(force=True)
+    save_all_to_csv()
+    info_label.configure(
+        text="🆕 Neuer Umsatz vorbereitet. Bitte Transaktionen erfassen."
+    )
+    for window in list(open_transaction_windows):
+        if window.winfo_exists():
+            window.event_generate("<<TransactionsUpdated>>", when="tail")
+        else:
+            open_transaction_windows.remove(window)
+
 
 
 def delete_selected_transaction():
@@ -671,6 +695,11 @@ def exportieren():
     except Exception as exc:
         info_label.configure(text=f"❌ Fehler beim Export: {exc}")
 
+    name = simpledialog.askstring(
+        "Umsatz speichern",
+        "Name für den Umsatz (Dateiname)",
+        parent=app,
+    )
 
 # === GUI ELEMENTE ===
 aktuelles_datum = heutiges_datum
