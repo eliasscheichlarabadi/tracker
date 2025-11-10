@@ -155,14 +155,19 @@ def save_umsatz_history():
         with open(UMSATZ_HISTORY_FILE, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
             writer.writeheader()
-            for entry in umsatz_history:
+
+            def sort_key(entry: dict) -> tuple:
+                date_str = (entry.get("erstellt_am") or "")
+                return (date_str, entry.get("csv_datei") or "")
+
+            for entry in sorted(umsatz_history, key=sort_key, reverse=True):
                 writer.writerow(entry)
     except Exception:
         pass
 
 
 def record_umsatz_speicherung(csv_path, einnahmen, ausgaben, gewinn, endbestand):
-    """Store metadata for the saved revenue report."""
+    """Store metadata for the saved revenue report, replacing duplicates."""
     entry = {
         "erstellt_am": date.today().strftime("%Y-%m-%d"),
         "firma": firmenname,
@@ -173,7 +178,18 @@ def record_umsatz_speicherung(csv_path, einnahmen, ausgaben, gewinn, endbestand)
         "gewinn": f"{gewinn:.2f}",
         "endbestand": f"{endbestand:.2f}",
     }
+
+    # Entferne bestehende Einträge mit derselben CSV-Datei, um Konflikte zu vermeiden
+    umsatz_history[:] = [
+        existing for existing in umsatz_history if existing.get("csv_datei") != csv_path
+    ]
     umsatz_history.append(entry)
+
+    def sort_key(item: dict) -> tuple:
+        date_str = (item.get("erstellt_am") or "")
+        return (date_str, item.get("csv_datei") or "")
+
+    umsatz_history.sort(key=sort_key, reverse=True)
     save_umsatz_history()
 
 
@@ -604,7 +620,8 @@ def save_all_to_csv():
     try:
         with open(DB_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, delimiter=';')
-            writer.writerow(["Firma", firmenname])
+            if firmenname:
+                writer.writerow(["Firma", firmenname])
             # write anfangsbestand as first line
             writer.writerow(["Anfangsbestand", f"{anfangsbestand:.2f}"])
             for t in transaktionen:
@@ -764,7 +781,35 @@ def ask_anfangsbestand_if_needed(force: bool = False):
 
         global anfangsbestand
         anfangsbestand = val
-        save_all_to_csv()
+
+        # Bewahre bestehende Transaktionen ohne doppelte Kopfzeilen
+        remaining_rows = []
+        if os.path.exists(DB_CSV):
+            try:
+                with open(DB_CSV, newline="", encoding="utf-8") as f:
+                    reader = csv.reader(f, delimiter=";")
+                    for row in reader:
+                        if not row:
+                            continue
+                        key = row[0].strip().lower()
+                        if key in {"anfangsbestand", "firma"}:
+                            continue
+                        remaining_rows.append(row)
+            except Exception:
+                remaining_rows = []
+
+        try:
+            with open(DB_CSV, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f, delimiter=';')
+                if firmenname:
+                    writer.writerow(["Firma", firmenname])
+                writer.writerow(["Anfangsbestand", f"{anfangsbestand:.2f}"])
+                writer.writerows(remaining_rows)
+        except Exception as exc:
+            info_label.configure(text=f"❌ Fehler beim Schreiben der DB: {exc}")
+            dialog.destroy()
+            return
+
         if anfangsbestand >= 1000:
             bestand_str = f"{anfangsbestand:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         else:
