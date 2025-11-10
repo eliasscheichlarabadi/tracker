@@ -49,7 +49,12 @@ def format_currency(value):
         return ""
     value = round(float(value), 2)
     if abs(value) >= 1000:
-        formatted = f"{abs(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        formatted = (
+            f"{abs(value):,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
     else:
         formatted = f"{abs(value):.2f}".replace(".", ",")
     return f"{formatted} €"
@@ -80,7 +85,9 @@ def load_settings():
         with open(SETTINGS_FILE, encoding="utf-8") as f:
             data = json.load(f)
         firmenname = data.get("zuletzt_verwendete_firma", "").strip()
-        firmen_liste = sorted({name.strip() for name in data.get("firmen", []) if name.strip()})
+        firmen_liste = sorted(
+            {name.strip() for name in data.get("firmen", []) if name.strip()}
+        )
     except Exception:
         firmenname = ""
         firmen_liste = []
@@ -270,7 +277,12 @@ def show_umsatz_history():
     )
     dropdown.pack(side="left", padx=(0, 10), pady=10)
 
-    close_button = ctk.CTkButton(option_frame, text="Schließen", command=dialog.destroy, width=120)
+    close_button = ctk.CTkButton(
+        option_frame,
+        text="Schließen",
+        command=dialog.destroy,
+        width=120,
+    )
     close_button.pack(side="right", pady=10)
 
     details_box = ctk.CTkTextbox(dialog, height=220)
@@ -304,7 +316,9 @@ def create_new_umsatz():
     ask_firma_if_needed(force=True)
     ask_anfangsbestand_if_needed(force=True)
     save_all_to_csv()
-    info_label.configure(text="🆕 Neuer Umsatz vorbereitet. Bitte Transaktionen erfassen.")
+    info_label.configure(
+        text="🆕 Neuer Umsatz vorbereitet. Bitte Transaktionen erfassen."
+    )
 
 # === FUNKTIONEN ===
 def datum_anzeigen():
@@ -324,7 +338,11 @@ def transaktion_hinzufügen():
     # accept comma as decimal separator
     betrag_text = betrag_entry.get().strip().replace(',', '.')
     try:
-        betrag_raw = float(betrag_text) if betrag_text != "" else 0.0
+        betrag_raw = (
+            float(betrag_text)
+            if betrag_text != ""
+            else 0.0
+        )
     except ValueError:
         info_label.configure(text="❌ Ungültiger Betrag")
         return
@@ -355,10 +373,17 @@ def transaktion_hinzufügen():
     # Formatiere Betrag mit Tausenderpunkten und Komma für die Anzeige
     betrag_abs = abs(betrag)
     if betrag_abs >= 1000:
-        betrag_str = f"{betrag_abs:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        betrag_str = (
+            f"{betrag_abs:,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
     else:
         betrag_str = f"{betrag_abs:.2f}".replace(".", ",")
-    info_label.configure(text=f"💾 Transaktion gespeichert ({kategorie}: {betrag_str} €)")
+    info_label.configure(
+        text=f"💾 Transaktion gespeichert ({kategorie}: {betrag_str} €)"
+    )
     betrag_entry.delete(0, "end")
     refresh_transaction_list()
 
@@ -376,7 +401,9 @@ def umsatz_speichern():
     gewinn = einnahmen - ausgaben
     endbestand = anfangsbestand + gewinn
 
-    base_name = sanitize_filename(f"{firmenname}_{aktuelles_datum.strftime('%Y-%m-%d')}")
+    base_name = sanitize_filename(
+        f"{firmenname}_{aktuelles_datum.strftime('%Y-%m-%d')}"
+    )
     csv_filename = f"{base_name}.csv"
     csv_path = os.path.join(UMSAETZE_DIR, csv_filename)
 
@@ -390,7 +417,9 @@ def umsatz_speichern():
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, delimiter=";")
             writer.writerow(["Firma", firmenname])
-            writer.writerow(["Bezugsdatum", aktuelles_datum.strftime("%Y-%m-%d")])
+            writer.writerow(
+                ["Bezugsdatum", aktuelles_datum.strftime("%Y-%m-%d")]
+            )
             writer.writerow(["Anfangsbestand", f"{anfangsbestand:.2f}"])
             writer.writerow([])
             writer.writerow(["Datum", "Kategorie", "Betrag"])
@@ -424,15 +453,25 @@ def exportieren():
             top=openpyxl.styles.Side(style='thin'),
             bottom=openpyxl.styles.Side(style='thin')
         )
-        header_fill = openpyxl.styles.PatternFill(start_color='E6E6E6', end_color='E6E6E6', fill_type='solid')
-        grey_fill = openpyxl.styles.PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
+        header_fill = openpyxl.styles.PatternFill(
+            start_color='E6E6E6',
+            end_color='E6E6E6',
+            fill_type='solid',
+        )
+        grey_fill = openpyxl.styles.PatternFill(
+            start_color='F2F2F2',
+            end_color='F2F2F2',
+            fill_type='solid',
+        )
 
         # Firmenname in der ersten Zeile
         ws.append([firmenname])
         ws.append([])  # Leerzeile
         
         # Anfangsbestand in der dritten Zeile
-        ws.append(["", "", "", "Anfangsbestand:", format_currency(anfangsbestand)])
+        ws.append(
+            ["", "", "", "Anfangsbestand:", format_currency(anfangsbestand)]
+        )
         anfang_row = ws.max_row
         for col in range(4, 6):
             cell = ws.cell(row=anfang_row, column=col)
@@ -489,7 +528,9 @@ def exportieren():
                     cell.alignment = openpyxl.styles.Alignment(horizontal='left')
             
             # Beleg-Nr. zentrieren
-            ws.cell(row=current_row, column=1).alignment = openpyxl.styles.Alignment(horizontal='center')
+            ws.cell(row=current_row, column=1).alignment = (
+                openpyxl.styles.Alignment(horizontal='center')
+            )
 
         # Summen
         einnahmen = sum(t["Betrag"] for t in transaktionen if t["Betrag"] > 0)
@@ -514,7 +555,9 @@ def exportieren():
         
         # Summen einfügen mit angepasster Formatierung
         # Gesamtzeile mit Einnahmen und Ausgaben nebeneinander
-        ws.append(["", "", "Gesamt:", format_currency(einnahmen), format_currency(ausgaben)])
+        ws.append(
+            ["", "", "Gesamt:", format_currency(einnahmen), format_currency(ausgaben)]
+        )
         current_row = ws.max_row
         
         # Gesamttext mit grauem Hintergrund
@@ -533,7 +576,9 @@ def exportieren():
             cell.alignment = openpyxl.styles.Alignment(horizontal='right')
 
         # Endbestand (Text mit grauem Fülleffekt, Betrag ohne)
-        ws.append(["", "", "", "Endbestand:", format_currency(endbestand)])
+        ws.append(
+            ["", "", "", "Endbestand:", format_currency(endbestand)]
+        )
         current_row = ws.max_row
         for col in range(4, 6):
             cell = ws.cell(row=current_row, column=col)
@@ -637,7 +682,12 @@ def refresh_transaction_list():
         # Formatiere Betrag mit Tausenderpunkten und Komma
         betrag = abs(t['Betrag'])
         if betrag >= 1000:
-            betrag_str = f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            betrag_str = (
+                f"{betrag:,.2f}"
+                .replace(",", "X")
+                .replace(".", ",")
+                .replace("X", ".")
+            )
         else:
             betrag_str = f"{betrag:.2f}".replace(".", ",")
         
@@ -651,7 +701,10 @@ def refresh_transaction_list():
     
     # Scrolle zur letzten Transaktion
     transaction_listbox.see(tk.END)
-    transaction_listbox.selection_clear(0, tk.END)  # Entferne eventuell vorhandene Auswahl
+    transaction_listbox.selection_clear(
+        0,
+        tk.END,
+    )  # Entferne eventuell vorhandene Auswahl
 
 
 def delete_selected_transaction():
@@ -672,10 +725,17 @@ def delete_selected_transaction():
     # Formatiere Betrag für die Anzeige
     betrag_abs = abs(removed['Betrag'])
     if betrag_abs >= 1000:
-        betrag_str = f"{betrag_abs:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        betrag_str = (
+            f"{betrag_abs:,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
     else:
         betrag_str = f"{betrag_abs:.2f}".replace(".", ",")
-    info_label.configure(text=f"🗑️ Transaktion gelöscht: {removed['Kategorie']} {betrag_str} €")
+    info_label.configure(
+        text=f"🗑️ Transaktion gelöscht: {removed['Kategorie']} {betrag_str} €"
+    )
 
 
 def ask_firma_if_needed(force: bool = False):
@@ -688,7 +748,11 @@ def ask_firma_if_needed(force: bool = False):
     dialog.title("Firma auswählen")
     dialog.geometry("420x220")
 
-    label = ctk.CTkLabel(dialog, text="Für welche Firma soll der Umsatz erfasst werden?", wraplength=360)
+    label = ctk.CTkLabel(
+        dialog,
+        text="Für welche Firma soll der Umsatz erfasst werden?",
+        wraplength=360,
+    )
     label.pack(pady=(20, 10))
 
     options = sorted(firmen_liste)
@@ -722,7 +786,13 @@ def ask_firma_if_needed(force: bool = False):
             entry.insert(0, value)
             entry.configure(state="disabled")
 
-    dropdown = ctk.CTkOptionMenu(dialog, values=options, variable=selection_var, command=on_select, width=260)
+    dropdown = ctk.CTkOptionMenu(
+        dialog,
+        values=options,
+        variable=selection_var,
+        command=on_select,
+        width=260,
+    )
     dropdown.pack(pady=(5, 10))
 
     entry.pack(pady=(0, 10))
@@ -748,7 +818,12 @@ def ask_firma_if_needed(force: bool = False):
         info_label.configure(text=f"Firma gesetzt: {firmenname}")
         dialog.destroy()
 
-    submit_btn = ctk.CTkButton(dialog, text="OK", command=submit, width=140)
+    submit_btn = ctk.CTkButton(
+        dialog,
+        text="OK",
+        command=submit,
+        width=140,
+    )
     submit_btn.pack(pady=(5, 15))
 
     on_select(selection_var.get())
@@ -811,10 +886,17 @@ def ask_anfangsbestand_if_needed(force: bool = False):
             return
 
         if anfangsbestand >= 1000:
-            bestand_str = f"{anfangsbestand:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            bestand_str = (
+                f"{anfangsbestand:,.2f}"
+                .replace(",", "X")
+                .replace(".", ",")
+                .replace("X", ".")
+            )
         else:
             bestand_str = f"{anfangsbestand:.2f}".replace(".", ",")
-        info_label.configure(text=f"Anfangsbestand gesetzt: {bestand_str} €")
+        info_label.configure(
+            text=f"Anfangsbestand gesetzt: {bestand_str} €"
+        )
         dialog.destroy()
 
     submit_btn = ctk.CTkButton(dialog, text="OK", command=submit)
@@ -828,14 +910,24 @@ aktuelles_datum = heutiges_datum
 datum_frame = ctk.CTkFrame(app)
 datum_frame.pack(pady=10)
 
-minus_button = ctk.CTkButton(datum_frame, text="◀", width=40, command=datum_minus)
+minus_button = ctk.CTkButton(
+    datum_frame,
+    text="◀",
+    width=40,
+    command=datum_minus,
+)
 minus_button.pack(side="left", padx=5)
 
 datum_label = ctk.CTkLabel(datum_frame, text="")
 datum_label.pack(side="left", padx=10)
 datum_anzeigen()
 
-plus_button = ctk.CTkButton(datum_frame, text="▶", width=40, command=datum_plus)
+plus_button = ctk.CTkButton(
+    datum_frame,
+    text="▶",
+    width=40,
+    command=datum_plus,
+)
 plus_button.pack(side="left", padx=5)
 
 # Kategorie Auswahl mit einheitlicher Einrückung
@@ -861,19 +953,42 @@ def on_enter_pressed(event):
 betrag_entry.bind("<Return>", on_enter_pressed)
 
 # Buttons
-add_button = ctk.CTkButton(app, text="Transaktion hinzufügen", command=transaktion_hinzufügen)
+add_button = ctk.CTkButton(
+    app,
+    text="Transaktion hinzufügen",
+    command=transaktion_hinzufügen,
+)
 add_button.pack(pady=5)
 
-export_button = ctk.CTkButton(app, text="📤 In Excel exportieren", fg_color="green", command=exportieren)
+export_button = ctk.CTkButton(
+    app,
+    text="📤 In Excel exportieren",
+    fg_color="green",
+    command=exportieren,
+)
 export_button.pack(pady=10)
 
-save_umsatz_button = ctk.CTkButton(app, text="💾 Umsatz speichern", fg_color="#16a085", command=umsatz_speichern)
+save_umsatz_button = ctk.CTkButton(
+    app,
+    text="💾 Umsatz speichern",
+    fg_color="#16a085",
+    command=umsatz_speichern,
+)
 save_umsatz_button.pack(pady=5)
 
-history_button = ctk.CTkButton(app, text="📂 Umsätze anzeigen", command=show_umsatz_history)
+history_button = ctk.CTkButton(
+    app,
+    text="📂 Umsätze anzeigen",
+    command=show_umsatz_history,
+)
 history_button.pack(pady=5)
 
-new_umsatz_button = ctk.CTkButton(app, text="🆕 Neuen Umsatz anlegen", fg_color="#2980b9", command=create_new_umsatz)
+new_umsatz_button = ctk.CTkButton(
+    app,
+    text="🆕 Neuen Umsatz anlegen",
+    fg_color="#2980b9",
+    command=create_new_umsatz,
+)
 new_umsatz_button.pack(pady=5)
 
 # Info Label
@@ -891,11 +1006,20 @@ listbox_container.pack(side="left", fill="both", expand=True, padx=(10, 0))
 transaction_listbox = tk.Listbox(listbox_container, height=8, width=60)
 transaction_listbox.pack(side="left", fill="both", expand=True)
 
-scrollbar = tk.Scrollbar(listbox_container, orient="vertical", command=transaction_listbox.yview)
+scrollbar = tk.Scrollbar(
+    listbox_container,
+    orient="vertical",
+    command=transaction_listbox.yview,
+)
 scrollbar.pack(side="right", fill="y")
 transaction_listbox.config(yscrollcommand=scrollbar.set)
 
-delete_button = ctk.CTkButton(transactions_frame, text="Transaktion löschen", fg_color="#e74c3c", command=delete_selected_transaction)
+delete_button = ctk.CTkButton(
+    transactions_frame,
+    text="Transaktion löschen",
+    fg_color="#e74c3c",
+    command=delete_selected_transaction,
+)
 delete_button.pack(side="left", padx=10)
 
 # Load existing DB and ask for firma and Anfangsbestand if needed before starting
@@ -908,10 +1032,20 @@ ask_firma_if_needed()
 ask_anfangsbestand_if_needed()
 # Formatiere Anfangsbestand für die Anzeige
 if anfangsbestand >= 1000:
-    bestand_str = f"{anfangsbestand:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    bestand_str = (
+        f"{anfangsbestand:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
 else:
     bestand_str = f"{anfangsbestand:.2f}".replace(".", ",")
 firmeninfo = f" | Firma: {firmenname}" if firmenname else ""
-info_label.configure(text=f"Anfangsbestand: {bestand_str} € | geladene Transaktionen: {len(transaktionen)}{firmeninfo}")
+info_label.configure(
+    text=(
+        "Anfangsbestand: "
+        f"{bestand_str} € | geladene Transaktionen: {len(transaktionen)}{firmeninfo}"
+    )
+)
 
 app.mainloop()
